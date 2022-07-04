@@ -36,7 +36,7 @@ import Data.Array
 
 allEqual :: Eq a => [a] -> Bool
 allEqual [] = True
-allEqual (x:xs) = length (filter (\y -> y /= x) xs) == 0
+allEqual (x:xs) = all (==x) xs
 
 ------------------------------------------------------------------------------
 -- Ex 2: implement the function distinct which returns True if all
@@ -51,9 +51,7 @@ allEqual (x:xs) = length (filter (\y -> y /= x) xs) == 0
 --   distinct [1,2] ==> True
 
 distinct :: Eq a => [a] -> Bool
-distinct [] = True
-distinct (s:xs) = if s `elem` xs then False else distinct xs
--- TODO: what's the function that makes this easy?
+distinct xs = xs == nub xs
 
 ------------------------------------------------------------------------------
 -- Ex 3: implement the function middle that returns the middle value
@@ -66,8 +64,8 @@ distinct (s:xs) = if s `elem` xs then False else distinct xs
 --   middle 'b' 'a' 'c'  ==> 'b'
 --   middle 1 7 3        ==> 3
 
-middle :: Ord a => a -> a -> a -> a
-middle x y z = sort [x, y, z] !! 1
+middle :: (Ord a) => a -> a -> a -> a
+middle x y z = sort [x,y,z] !! 1
 
 ------------------------------------------------------------------------------
 -- Ex 4: return the range of an input list, that is, the difference
@@ -83,7 +81,7 @@ middle x y z = sort [x, y, z] !! 1
 --   rangeOf [1.5,1.0,1.1,1.2]  ==> 0.5
 
 rangeOf :: (Num a, Ord a) => [a] -> a
-rangeOf xs = let sxs = sort xs in last sxs - head sxs
+rangeOf xs = maximum xs - minimum xs
 
 ------------------------------------------------------------------------------
 -- Ex 5: given a (non-empty) list of (non-empty) lists, return the longest
@@ -101,16 +99,20 @@ rangeOf xs = let sxs = sort xs in last sxs - head sxs
 --   longest [[1,2,3],[4,5],[6]] ==> [1,2,3]
 --   longest ["bcd","def","ab"] ==> "bcd"
 
-longest :: (Ord a) => [[a]] -> [a]
-longest (s:xs) = longest' s xs
+longest :: Ord a => [[a]] -> [a]
+longest = last . sortBy (comparing length) . reverse . sortBy (comparing head)
 
-longest' :: (Ord a) => [a] -> [[a]] -> [a]
-longest' found []  = found
-longest' found (s:xs) = if length found < length s
-                        then longest' s xs
-                        else if length found == length s && head s < head found
-                        then longest' s xs
-                        else longest' found xs
+{-
+-- Answer to the challenge:
+longest (xs:xss) =
+  let longer :: Ord a => [a] -> [a] -> [a]
+      longer xs ys
+        | length xs < length ys = ys
+        | length xs > length ys = xs
+        | head xs <= head ys    = xs
+        | otherwise             = ys
+  in foldr longer xs xss
+-}
 
 ------------------------------------------------------------------------------
 -- Ex 6: Implement the function incrementKey, that takes a list of
@@ -127,7 +129,10 @@ longest' found (s:xs) = if length found < length s
 --   incrementKey 'a' [('a',3.4)] ==> [('a',4.4)]
 
 incrementKey :: (Eq k, Num v) => k -> [(k,v)] -> [(k,v)]
-incrementKey xk xs = map (\(k,v) -> if k == xk then (k, v + 1) else (k, v)) xs
+incrementKey k kvs = map incr kvs
+    where incr (k',v)
+              | k'==k = (k',v+1)
+              | otherwise = (k',v)
 
 ------------------------------------------------------------------------------
 -- Ex 7: compute the average of a list of values of the Fractional
@@ -161,16 +166,10 @@ average xs = sum xs / fromIntegral (length xs)
 --     ==> "Lisa"
 
 winner :: Map.Map String Int -> String -> String -> String
-winner scores player1 player2 = if p1Points >= p2Points
-                                then player1
-                                else player2
-                                where p1Points = pPoints scores player1
-                                      p2Points = pPoints scores player2
-
-pPoints :: Map.Map String Int -> String -> Int
-pPoints scores player = case Map.lookup player scores of
-                        (Just val) -> val
-                        Nothing -> 0
+winner scores player1 player2
+  | score player2 > score player1 = player2
+  | otherwise = player1
+  where score p = Map.findWithDefault 0 p scores
 
 ------------------------------------------------------------------------------
 -- Ex 9: compute how many times each value in the list occurs. Return
@@ -185,16 +184,14 @@ pPoints scores player = case Map.lookup player scores of
 --     ==> Map.fromList [(False,3),(True,1)]
 
 freqs :: (Eq a, Ord a) => [a] -> Map.Map a Int
-freqs xs = freqs' xs $ Map.fromList []
+freqs [] = Map.empty
+freqs (x:xs) = Map.alter inc x rest
+  where rest = freqs xs
+        inc Nothing = Just 1
+        inc (Just n) = Just (n+1)
 
-freqs' :: (Eq a, Ord a) => [a] -> Map.Map a Int -> Map.Map a Int
-freqs' [] fmap = fmap
-freqs' (s:xs) fmap = let val = (\k -> Map.lookup k fmap)
-                         insval = (\v -> case v of
-                                         (Just v) -> v + 1
-                                         Nothing -> 1)
-                     in freqs' xs $ Map.insert s (insval(val s)) fmap
--- TODO: challenges
+-- Answer to both challenges:
+-- freqs = foldr (Map.alter $ Just . maybe 1 (+1)) Map.empty
 
 ------------------------------------------------------------------------------
 -- Ex 10: recall the withdraw example from the course material. Write a
@@ -221,16 +218,13 @@ freqs' (s:xs) fmap = let val = (\k -> Map.lookup k fmap)
 --   transfer "Lisa" "Mike" 20 bank
 --     ==> fromList [("Bob",100),("Mike",50)]
 
--- https://hackage.haskell.org/package/containers-0.6.5.1/docs/Data-Map-Strict.html#t:Map
 transfer :: String -> String -> Int -> Map.Map String Int -> Map.Map String Int
-transfer from to amount bank = if amount < 0 || Map.notMember from bank || Map.notMember to bank
-                               then bank
-                               else if balance < amount
-                               then bank
-                               else Map.adjust (\x -> x - amount) from $ Map.adjust (\x -> x + amount) to bank
-                               where balance = case Map.lookup from bank of
-                                                    Nothing -> 0
-                                                    (Just sum) -> sum
+transfer from to amount bank =
+  case (Map.lookup from bank, Map.lookup to bank) of
+    (Just fromBalance, Just toBalance)
+      | amount >= 0 && fromBalance >= amount ->
+          Map.adjust (+amount) to (Map.adjust (\x -> x-amount) from bank)
+    _ -> bank
 
 ------------------------------------------------------------------------------
 -- Ex 11: given an Array and two indices, swap the elements in the indices.
@@ -240,9 +234,7 @@ transfer from to amount bank = if amount < 0 || Map.notMember from bank || Map.n
 --         ==> array (1,4) [(1,"one"),(2,"three"),(3,"two"),(4,"four")]
 
 swap :: Ix i => i -> i -> Array i a -> Array i a
-swap i j arr = arr // [(i,jval),(j,ival)]
-               where jval = arr ! j
-                     ival = arr ! i
+swap i j arr = arr // [(i,arr!j), (j, arr!i)]
 
 ------------------------------------------------------------------------------
 -- Ex 12: given an Array, find the index of the largest element. You
@@ -253,11 +245,5 @@ swap i j arr = arr // [(i,jval),(j,ival)]
 -- Hint: check out Data.Array.indices or Data.Array.assocs
 
 maxIndex :: (Ix i, Ord a) => Array i a -> i
-maxIndex arr = maxIndex' arr (indices arr) (fst$ bounds arr)
-
-
-maxIndex' :: (Ix i, Ord a) => Array i a -> [i] -> i -> i
-maxIndex' _ [] b = b
-maxIndex' arr (i:is) b = if arr ! i > arr ! b
-                            then maxIndex' arr is i
-                            else maxIndex' arr is b
+maxIndex arr = index
+  where (index, _) = maximumBy (\(_,x) (_,y) -> compare x y) (assocs arr)
