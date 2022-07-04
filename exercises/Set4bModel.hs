@@ -22,8 +22,8 @@ countNothings :: [Maybe a] -> Int
 countNothings xs = foldr countHelper 0 xs
 
 countHelper :: Maybe a -> Int -> Int
-countHelper Nothing val = val + 1
-countHelper (Just _) val = val
+countHelper Nothing n = n+1
+countHelper (Just _) n = n
 
 ------------------------------------------------------------------------------
 -- Ex 2: myMaximum with a fold. Just like in the previous exercise,
@@ -38,7 +38,7 @@ myMaximum [] = 0
 myMaximum (x:xs) = foldr maxHelper x xs
 
 maxHelper :: Int -> Int -> Int
-maxHelper new old = max new old
+maxHelper = max
 
 ------------------------------------------------------------------------------
 -- Ex 3: compute the sum and length of a list with a fold. Define
@@ -55,9 +55,8 @@ maxHelper new old = max new old
 sumAndLength :: [Double] -> (Double,Int)
 sumAndLength xs = foldr slHelper slStart xs
 
-slStart = (0.0, 0)
-slHelper :: Double -> (Double,Int) -> (Double,Int)
-slHelper new old = (fst old + new, snd old + 1)
+slStart = (0,0)
+slHelper x (sum,cnt) = (sum+x,cnt+1)
 
 ------------------------------------------------------------------------------
 -- Ex 4: implement concat with a fold. Define concatHelper and
@@ -72,8 +71,7 @@ myConcat :: [[a]] -> [a]
 myConcat xs = foldr concatHelper concatStart xs
 
 concatStart = []
-concatHelper :: [a] -> [a] -> [a]
-concatHelper new old = new ++ old
+concatHelper = (++)
 
 ------------------------------------------------------------------------------
 -- Ex 5: get all occurrences of the largest number in a list with a
@@ -87,15 +85,12 @@ concatHelper new old = new ++ old
 largest :: [Int] -> [Int]
 largest xs = foldr largestHelper [] xs
 
-largestHelper :: Int -> [Int] -> [Int]
-largestHelper new [] = [new]
-largestHelper new old =
-    if o > new
-    then old
-    else if o < new
-    then [new]
-    else new : old
-    where (o:_) = old
+largestHelper x [] = [x]
+largestHelper x (y:ys)
+  | x > y = [x]
+  | x == y = x:y:ys
+  | otherwise = y:ys
+
 
 ------------------------------------------------------------------------------
 -- Ex 6: get the first element of a list with a fold. Define
@@ -110,8 +105,7 @@ largestHelper new old =
 myHead :: [a] -> Maybe a
 myHead xs = foldr headHelper Nothing xs
 
-headHelper :: a -> Maybe a -> Maybe a
-headHelper new _ = Just new
+headHelper x _ = Just x
 
 ------------------------------------------------------------------------------
 -- Ex 7: get the last element of a list with a fold. Define lasthelper
@@ -127,6 +121,6 @@ myLast :: [a] -> Maybe a
 myLast xs = foldr lastHelper Nothing xs
 
 lastHelper :: a -> Maybe a -> Maybe a
-lastHelper new Nothing = Just new
-lastHelper _ (Just old) = Just old
+lastHelper x Nothing = Just x
+lastHelper _ (Just x) = Just x
 
