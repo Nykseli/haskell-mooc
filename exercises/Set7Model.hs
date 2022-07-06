@@ -26,12 +26,11 @@ data Velocity = Velocity Double
 
 -- velocity computes a velocity given a distance and a time
 velocity :: Distance -> Time -> Velocity
-velocity (Distance _) (Time 0.0) = Velocity 0
-velocity (Distance d) (Time t)   = Velocity(d / t)
+velocity (Distance d) (Time t) = Velocity (d/t)
 
 -- travel computes a distance given a velocity and a time
 travel :: Velocity -> Time -> Distance
-travel (Velocity v) (Time t)   = Distance(v * t)
+travel (Velocity v) (Time t) = Distance (v*t)
 
 ------------------------------------------------------------------------------
 -- Ex 2: let's implement a simple Set datatype. A Set is a list of
@@ -50,33 +49,19 @@ data Set a = Set [a]
 
 -- emptySet is a set with no elements
 emptySet :: Set a
-emptySet = Set([])
+emptySet = Set []
 
 -- member tests if an element is in a set
-member :: Eq a => a -> Set a -> Bool
-member val (Set (e:es)) = val == e || (member' val es)
-  where
-    member' _ []      = False
-    member' v (v':vs) = v == v' || (member' v vs)
-member val emptySet     = False
+member a (Set xs) = elem a xs
 
 -- add a member to a set
--- Sort impl
--- add :: (Eq a, Ord a) => a -> Set a -> Set a
--- add val (Set set)
---   | member val (Set set) = (Set set)
---   | otherwise            = Set (sort val:set)
-
--- Insert impl
 add :: Ord a => a -> Set a -> Set a
-add val (Set set)
-  | member val (Set set) = (Set set)
-  | otherwise            = Set(add' val set)
-  where
-    add' v [] = [v]
-    add' v (v':vs)
-      | v <= v' = (v:v':vs)
-      | otherwise = v':(add' v vs)
+add a (Set xs) = Set (go a xs)
+  where go a [] = [a]
+        go a (x:xs)
+          | a == x = x:xs
+          | a > x = x : go a xs
+          | a < x = a : x : xs
 
 ------------------------------------------------------------------------------
 -- Ex 3: a state machine for baking a cake. The type Event represents
@@ -111,19 +96,19 @@ add val (Set set)
 data Event = AddEggs | AddFlour | AddSugar | Mix | Bake
   deriving (Eq,Show)
 
-data State = Start | EggsAdded | FlourAdded | SugarAdded | Mixable | Bakeable | Error | Finished
+data State = Start | Eggs | EggsFlour | EggsSugar | AllIngredients | Mixed | Error | Finished
   deriving (Eq,Show)
 
 step :: State -> Event -> State
-step Start      AddEggs  = EggsAdded
-step EggsAdded  AddFlour = FlourAdded
-step EggsAdded  AddSugar = SugarAdded
-step SugarAdded AddFlour = Mixable
-step FlourAdded AddSugar = Mixable
-step Mixable    Mix      = Bakeable
-step Bakeable   Bake     = Finished
-step Finished   _        = Finished
-step _          _        = Error
+step Start          AddEggs  = Eggs
+step Eggs           AddFlour = EggsFlour
+step Eggs           AddSugar = EggsSugar
+step EggsFlour      AddSugar = AllIngredients
+step EggsSugar      AddFlour = AllIngredients
+step AllIngredients Mix      = Mixed
+step Mixed          Bake     = Finished
+step Finished       _        = Finished
+step _              _        = Error
 
 -- do not edit this
 bake :: [Event] -> State
@@ -143,7 +128,7 @@ bake events = go Start events
 --   average (1.0 :| [2.0,3.0])  ==>  2.0
 
 average :: Fractional a => NonEmpty a -> a
-average list = (sum list) / (fromIntegral $ length list)
+average (a:|as) = (a + sum as) / (1 + fromIntegral (length as))
 
 ------------------------------------------------------------------------------
 -- Ex 5: reverse a NonEmpty list.
@@ -151,9 +136,9 @@ average list = (sum list) / (fromIntegral $ length list)
 -- PS. The Data.List.NonEmpty type has been imported for you
 
 reverseNonEmpty :: NonEmpty a -> NonEmpty a
-reverseNonEmpty (x :| xs) = go [] x xs
-  where go state last []      = (last :| state)
-        go state last (v':vs) = go (last:state) v' vs
+reverseNonEmpty (x:|xs) = case reverse xs of
+  [] -> x :| []
+  (a:as) -> a :| (as ++ [x])
 
 ------------------------------------------------------------------------------
 -- Ex 6: implement Semigroup instances for the Distance, Time and
@@ -166,13 +151,13 @@ reverseNonEmpty (x :| xs) = go [] x xs
 --    ==> Velocity 20
 
 instance Semigroup Distance where
-  Distance a <> Distance b = Distance (a+b)
+  (Distance x) <> (Distance y) = Distance (x+y)
 
 instance Semigroup Time where
-  Time a <> Time b = Time (a+b)
+  (Time x) <> (Time y) = Time (x+y)
 
 instance Semigroup Velocity where
-  Velocity a <> Velocity b = Velocity (a+b)
+  (Velocity x) <> (Velocity y) = Velocity (x+y)
 
 ------------------------------------------------------------------------------
 -- Ex 7: implement a Monoid instance for the Set type from exercise 2.
@@ -182,11 +167,10 @@ instance Semigroup Velocity where
 --
 -- What are the class constraints for the instances?
 
-instance (Eq a, Ord a) => Semigroup (Set a) where
-  Set a <> Set b = foldr (add) (Set(a)) b
-
-instance (Eq a, Ord a) => Monoid (Set a) where
-  mempty         = emptySet
+instance Ord a => Semigroup (Set a) where
+  (Set as) <> set = foldr add set as
+instance Ord a => Monoid (Set a) where
+  mempty = Set []
 
 ------------------------------------------------------------------------------
 -- Ex 8: below you'll find two different ways of representing
@@ -263,12 +247,6 @@ instance Operation2 Multiply2 where
 --   passwordAllowed "p4ss" (And (ContainsSome "1234") (MinimumLength 5)) ==> False
 --   passwordAllowed "p4ss" (Or (ContainsSome "1234") (MinimumLength 5)) ==> True
 
-isElement :: Eq a => a -> [a] -> Bool
-isElement a [] = False
-isElement a (x:xs)
-  | a == x = True
-  | otherwise = isElement a xs
-
 data PasswordRequirement =
   MinimumLength Int
   | ContainsSome String    -- contains at least one of given characters
@@ -278,13 +256,11 @@ data PasswordRequirement =
   deriving Show
 
 passwordAllowed :: String -> PasswordRequirement -> Bool
-passwordAllowed str (MinimumLength len) = length str >= len
-passwordAllowed str (ContainsSome str') = go str' str
-  where go (c:cs) l = if isElement c l then True else go cs l
-        go _ _ = False
-passwordAllowed str (DoesNotContain str') = not $ passwordAllowed str (ContainsSome str')
-passwordAllowed str (And req1 req2) = (passwordAllowed str req1) && (passwordAllowed str req2)
-passwordAllowed str (Or req1 req2) = (passwordAllowed str req1) || (passwordAllowed str req2)
+passwordAllowed pw (MinimumLength len) = length pw >= len
+passwordAllowed pw (ContainsSome chars) = any (\c -> elem c chars) pw
+passwordAllowed pw (DoesNotContain chars) = not (passwordAllowed pw (ContainsSome chars))
+passwordAllowed pw (Or req1 req2) = passwordAllowed pw req1 || passwordAllowed pw req2
+passwordAllowed pw (And req1 req2) = passwordAllowed pw req1 && passwordAllowed pw req2
 
 ------------------------------------------------------------------------------
 -- Ex 10: a DSL for simple arithmetic expressions with addition and
@@ -307,32 +283,23 @@ passwordAllowed str (Or req1 req2) = (passwordAllowed str req1) || (passwordAllo
 --
 
 data Arithmetic = Literal Integer
-                | Div     Arithmetic Arithmetic
-                | Mult    Arithmetic Arithmetic
-                | Plus    Arithmetic Arithmetic
-                | Minus   Arithmetic Arithmetic
+                | Plus Arithmetic Arithmetic
+                | Times Arithmetic Arithmetic
   deriving Show
 
 literal :: Integer -> Arithmetic
-literal i = Literal i
+literal = Literal
 
 operation :: String -> Arithmetic -> Arithmetic -> Arithmetic
-operation "+" a b = Plus  a b
-operation "-" a b = Minus a b
-operation "*" a b = Mult  a b
-operation "/" a b = Div   a b
-operation _   _ _ = literal 0
+operation "+" = Plus
+operation "*" = Times
 
 evaluate :: Arithmetic -> Integer
-evaluate (Literal val) = val
-evaluate (Div     a b) = (evaluate a) `div` (evaluate b)
-evaluate (Mult    a b) = (evaluate a) *     (evaluate b)
-evaluate (Plus    a b) = (evaluate a) +     (evaluate b)
-evaluate (Minus   a b) = (evaluate a) -     (evaluate b)
+evaluate (Literal i) = i
+evaluate (Plus a b) = evaluate a + evaluate b
+evaluate (Times a b) = evaluate a * evaluate b
 
 render :: Arithmetic -> String
-render (Literal val) = show val
-render (Div     a b) = "("++(render a)++"/"++(render b)++")"
-render (Mult    a b) = "("++(render a)++"*"++(render b)++")"
-render (Plus    a b) = "("++(render a)++"+"++(render b)++")"
-render (Minus   a b) = "("++(render a)++"-"++(render b)++")"
+render (Literal i) = show i
+render (Plus a b) = "(" ++ render a ++ "+" ++ render b ++ ")"
+render (Times a b) = "(" ++ render a ++ "*" ++ render b ++ ")"
