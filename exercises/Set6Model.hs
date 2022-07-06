@@ -13,10 +13,10 @@ data Country = Finland | Switzerland | Norway
   deriving Show
 
 instance Eq Country where
-  Finland     == Finland     = True
-  Switzerland == Switzerland = True
-  Norway      == Norway      = True
-  _           == _           = False
+  Finland == Finland           = True
+  Switzerland == Switzerland   = True
+  Norway == Norway             = True
+  _ == _         = False
 
 ------------------------------------------------------------------------------
 -- Ex 2: implement an Ord instance for Country so that
@@ -25,20 +25,10 @@ instance Eq Country where
 -- Remember minimal complete definitions!
 
 instance Ord Country where
-  compare Finland Finland         = EQ
-  compare Finland _               = LT
-  compare Switzerland Switzerland = EQ
-  compare Switzerland _           = GT
-  compare Norway Norway           = EQ
-  compare Norway Finland          = GT
-  compare Norway Switzerland      = LT
-
-  x <= y = compare x y /= GT
-
-  min x y | x <= y    = x
-          | otherwise = y
-  max x y | x <= y    = y
-          | otherwise = x
+  Finland <= Norway       = True
+  Finland <= Switzerland  = True
+  Norway <= Switzerland   = True
+  x <= y                  = x == y
 
 ------------------------------------------------------------------------------
 -- Ex 3: Implement an Eq instance for the type Name which contains a String.
@@ -54,7 +44,7 @@ data Name = Name String
   deriving Show
 
 instance Eq Name where
-  (Name a) == (Name b) = map toLower a == map toLower b
+  Name s == Name s'  =  map toLower s == map toLower s'
 
 ------------------------------------------------------------------------------
 -- Ex 4: here is a list type parameterized over the type it contains.
@@ -68,10 +58,9 @@ data List a = Empty | LNode a (List a)
   deriving Show
 
 instance Eq a => Eq (List a) where
-  (LNode aval alist) == (LNode bval blist) | aval == bval = alist == blist
-                                           | otherwise    = False
-  Empty == Empty = True
-  _     == _     = False
+  Empty == Empty            = True
+  LNode x xs == LNode y ys  = x == y && xs == ys
+  _ == _                    = False
 
 ------------------------------------------------------------------------------
 -- Ex 5: below you'll find two datatypes, Egg and Milk. Implement a
@@ -86,38 +75,35 @@ instance Eq a => Eq (List a) where
 -- Example:
 --   price ChickenEgg  ==>  20
 
-class Price a where
-  price :: a -> Int
-
 data Egg = ChickenEgg | ChocolateEgg
   deriving Show
-
-instance Price Egg where
-  price ChickenEgg   = 20
-  price ChocolateEgg = 30
-
 data Milk = Milk Int -- amount in litres
   deriving Show
 
+class Price a where
+  price :: a -> Int
+
+instance Price Egg where
+  price ChickenEgg = 20
+  price ChocolateEgg = 30
+
 instance Price Milk where
-  price (Milk liters) = liters * 15
+  price (Milk litres) = 15 * litres
 
 ------------------------------------------------------------------------------
--- Ex 6: define the necessary instance hierarchy in order to be able
--- to compute these:
+-- Ex 6: define the necessary instances in order to be able to compute these:
 --
 -- price (Just ChickenEgg) ==> 20
 -- price [Milk 1, Milk 2]  ==> 45
 -- price [Just ChocolateEgg, Nothing, Just ChickenEgg]  ==> 50
 -- price [Nothing, Nothing, Just (Milk 1), Just (Milk 2)]  ==> 45
 
-instance Price a => Price (Maybe a) where
-  price Nothing  = 0
-  price (Just a) = price a
-
 instance Price a => Price [a] where
-  price []  = 0
-  price xs = sum $ map price xs
+  price xs = sum (map price xs)
+
+instance Price a => Price (Maybe a) where
+  price Nothing = 0
+  price (Just xs) = price xs
 
 ------------------------------------------------------------------------------
 -- Ex 7: below you'll find the datatype Number, which is either an
@@ -129,15 +115,10 @@ instance Price a => Price [a] where
 data Number = Finite Integer | Infinite
   deriving (Show,Eq)
 
-
 instance Ord Number where
-  compare (Finite x) (Finite y) | x == y    = EQ
-                                | x <= y    = LT
-                                | otherwise = GT
-
-  compare Infinite   Infinite   = EQ
-  compare Infinite   _          = GT
-  compare _          Infinite   = LT
+  (Finite x) <= (Finite y) = x <= y
+  _          <= Infinite   = True
+  _          <= _          = False
 
 ------------------------------------------------------------------------------
 -- Ex 8: rational numbers have a numerator and a denominator that are
@@ -163,7 +144,7 @@ data RationalNumber = RationalNumber Integer Integer
   deriving Show
 
 instance Eq RationalNumber where
-  (RationalNumber a b) == (RationalNumber c d) = a*d == b*c
+  (RationalNumber a b) == (RationalNumber c d) = a * d == b * c
 
 ------------------------------------------------------------------------------
 -- Ex 9: implement the function simplify, which simplifies rational a
@@ -183,9 +164,7 @@ instance Eq RationalNumber where
 -- Hint: Remember the function gcd?
 
 simplify :: RationalNumber -> RationalNumber
-simplify (RationalNumber a b) =
-  let divi = gcd a b
-  in RationalNumber (a `div` divi) (b `div` divi)
+simplify (RationalNumber a b) = RationalNumber (div a c) (div b c) where c = gcd a b
 
 ------------------------------------------------------------------------------
 -- Ex 10: implement the typeclass Num for RationalNumber. The results
@@ -207,19 +186,23 @@ simplify (RationalNumber a b) =
 
 instance Num RationalNumber where
   (RationalNumber a b) + (RationalNumber c d) =
-    simplify $ RationalNumber num den
-    where num = a*d + c*b
-          den = b * d
+    simplify (RationalNumber (a * d + b * c) (b * d))
 
   (RationalNumber a b) * (RationalNumber c d) =
-    simplify $ RationalNumber num den
-    where num = a * c
-          den = b * d
+    simplify (RationalNumber (a * c) (b * d))
 
-  abs (RationalNumber a b) = (RationalNumber (abs a) (abs b))
-  signum (RationalNumber a b) = (RationalNumber (signum a) (signum b))
-  fromInteger a = (RationalNumber a 1)
-  negate (RationalNumber a b) = (RationalNumber (0-a) b)
+  abs p@(RationalNumber a b)
+    | a * b < 0 = RationalNumber (-a) b
+    | otherwise = p
+
+  signum (RationalNumber a b)
+    | a * b < 0 = RationalNumber (-1) (1)
+    | a == 0    = RationalNumber 0 1
+    | otherwise = RationalNumber (1) (1)
+
+  fromInteger x = RationalNumber x 1
+
+  negate (RationalNumber a b) = RationalNumber (-a) b
 
 ------------------------------------------------------------------------------
 -- Ex 11: a class for adding things. Define a class Addable with a
@@ -235,16 +218,16 @@ instance Num RationalNumber where
 --   add zero [True,False]  ==>  [True,False]
 
 class Addable a where
-  add :: a -> a -> a
   zero :: a
+  add :: a -> a -> a
 
 instance Addable Integer where
-  add a b = a + b
   zero = 0
+  add = (+)
 
 instance Addable [a] where
-  add a b = a ++ b
   zero = []
+  add = (++)
 
 ------------------------------------------------------------------------------
 -- Ex 12: cycling. Implement a type class Cycle that contains a
@@ -276,22 +259,19 @@ data Color = Red | Green | Blue
 data Suit = Club | Spade | Diamond | Heart
   deriving (Show, Eq)
 
-class (Eq a) => Cycle a where
+class Cycle a where
   step :: a -> a
   stepMany :: Int -> a -> a
-  stepMany count a
-    | count > 0 = stepMany (count-1) (step a)
-    | otherwise  = a
+  stepMany 0 x = x
+  stepMany n x = stepMany (n-1) (step x)
 
 instance Cycle Color where
-  step a
-    | a == Red   = Green
-    | a == Green = Blue
-    | otherwise  = Red
+  step Red = Green
+  step Green = Blue
+  step Blue = Red
 
 instance Cycle Suit where
-  step a
-    | a == Club    = Spade
-    | a == Spade   = Diamond
-    | a == Diamond = Heart
-    | otherwise    = Club
+  step Club = Spade
+  step Spade = Diamond
+  step Diamond = Heart
+  step Heart = Club
