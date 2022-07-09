@@ -28,9 +28,10 @@ import Mooc.Todo
 workload :: Int -> Int -> String
 workload nExercises hoursPerExercise
   | total < 10 = "Piece of cake!"
-  | total < 100 = "Ok."
-  | otherwise = "Holy moly!"
+  | total > 100 = "Holy moly!"
+  | otherwise = "Ok."
   where total = nExercises * hoursPerExercise
+
 ------------------------------------------------------------------------------
 -- Ex 2: Implement the function echo that builds a string like this:
 --
@@ -42,8 +43,8 @@ workload nExercises hoursPerExercise
 -- Hint: use recursion
 
 echo :: String -> String
-echo "" = ""
-echo str = str ++ ", " ++ (echo $ tail str)
+echo [] = []
+echo xs = xs ++ ", " ++ echo (tail xs)
 
 ------------------------------------------------------------------------------
 -- Ex 3: A country issues some banknotes. The banknotes have a serial
@@ -56,12 +57,12 @@ echo str = str ++ ", " ++ (echo $ tail str)
 -- are valid.
 
 countValid :: [String] -> Int
-countValid list = length $ filter valid list
-  where valid str = let a = str !! 2
-                        b = str !! 4
-                        c = str !! 3
-                        d = str !! 5
-                    in a == b || c == d
+countValid ns = length (filter valid ns)
+  where valid n
+          -- indexing starts from zero!
+          | n !! 2 == n !! 4 = True
+          | n !! 3 == n !! 5 = True
+          | otherwise        = False
 
 ------------------------------------------------------------------------------
 -- Ex 4: Find the first element that repeats two or more times _in a
@@ -73,9 +74,10 @@ countValid list = length $ filter valid list
 --   repeated [1,2,1,2,3,3] ==> Just 3
 
 repeated :: Eq a => [a] -> Maybe a
-repeated [] = Nothing
-repeated (x:[]) = Nothing
-repeated (x:xs) = if x == head xs then Just x else repeated xs
+repeated (x:y:xs)
+  | x==y = Just x
+  | otherwise = repeated (y:xs)
+repeated _ = Nothing
 
 ------------------------------------------------------------------------------
 -- Ex 5: A laboratory has been collecting measurements. Some of the
@@ -97,14 +99,9 @@ repeated (x:xs) = if x == head xs then Just x else repeated xs
 --     ==> Left "no data"
 
 sumSuccess :: [Either String Int] -> Either String Int
-sumSuccess list = sum
-  where summer val sum = case val of
-                            (Right x) -> sum' sum x
-                            (Left _)  -> sum
-        sum' val i = case val of
-                        (Right x) -> Right(x+i)
-                        (Left _)  -> Right i
-        sum = foldr summer (Left "no data") list
+sumSuccess es = let successes = [x | Right x <- es]
+                in case successes of [] -> Left "no data"
+                                     xs -> Right (sum xs)
 
 ------------------------------------------------------------------------------
 -- Ex 6: A combination lock can either be open or closed. The lock
@@ -127,7 +124,6 @@ sumSuccess list = sum
 --   isOpen (open "1234" (lock (changeCode "0000" (open "1234" aLock)))) ==> False
 
 data Lock = Closed String | Open String
-  deriving Show
 
 -- aLock should be a locked lock with the code "1234"
 aLock :: Lock
@@ -135,25 +131,26 @@ aLock = Closed "1234"
 
 -- isOpen returns True if the lock is open
 isOpen :: Lock -> Bool
-isOpen (Open _)   = True
-isOpen (Closed _) = False
+isOpen (Open _) = True
+isOpen _        = False
 
 -- open tries to open the lock with the given code. If the code is
 -- wrong, nothing happens.
 open :: String -> Lock -> Lock
-open code (Closed code') = if code == code' then Open code else (Closed code')
-open _    lock           = lock
+open code (Closed code')
+  | code == code' = Open code
+open _ l = l
 
 -- lock closes a lock. If the lock is already closed, nothing happens.
 lock :: Lock -> Lock
-lock (Open code) = Closed code
-lock lock           = lock
+lock (Open c) = Closed c
+lock l        = l
 
 -- changeCode changes the code of an open lock. If the lock is closed,
 -- nothing happens.
 changeCode :: String -> Lock -> Lock
 changeCode code (Open _) = Open code
-changeCode _    lock     = lock
+changeCode _    l        = l
 
 ------------------------------------------------------------------------------
 -- Ex 7: Here's a type Text that just wraps a String. Implement an Eq
@@ -172,10 +169,7 @@ data Text = Text String
   deriving Show
 
 instance Eq Text where
-  (Text str1) == (Text str2) =
-    strip str1 == strip str2
-    where strip ""       = ""
-          strip (c:chrs) = if isSpace c then strip chrs else c:(strip chrs)
+  Text s == Text t  =  filter (not . isSpace) s == filter (not . isSpace) t
 
 ------------------------------------------------------------------------------
 -- Ex 8: We can represent functions or mappings as lists of pairs.
@@ -209,13 +203,9 @@ instance Eq Text where
 --       ==> [("a",1),("b",2)]
 
 compose :: (Eq a, Eq b) => [(a,b)] -> [(b,c)] -> [(a,c)]
-compose []   _    = []
-compose ((k,v):map1) map2 = case found of
-  Just f  -> (k, f):compose map1 map2
-  Nothing -> compose map1 map2
-  where found = find' map2
-        find' []            = Nothing
-        find' ((k',v'):kvs) = if v == k' then Just v' else find' kvs
+compose ab bc = concatMap apply ab
+  where apply (a,b) = case lookup b bc of Nothing -> []
+                                          Just c -> [(a,c)]
 
 ------------------------------------------------------------------------------
 -- Ex 9: Reorder a list using a list of indices.
@@ -243,8 +233,8 @@ compose ((k,v):map1) map2 = case found of
 --   permute [2, 1, 0] (permute [2, 1, 0] "foo") ==> "foo"
 --   permute [1, 0, 2] (permute [0, 2, 1] [9,3,5]) ==> [5,9,3]
 --   permute [0, 2, 1] (permute [1, 0, 2] [9,3,5]) ==> [3,5,9]
---   permute ([1, 0, 2] `multiply` [0, 2, 1]) [9,3,5] ==> [5,9,3]
---   permute ([0, 2, 1] `multiply` [1, 0, 2]) [9,3,5] ==> [3,5,9]
+--   permute ([0, 2, 1] `multiply` [1, 0, 2]) [9,3,5] ==> [5,9,3]
+--   permute ([1, 0, 2] `multiply` [0, 2, 1]) [9,3,5] ==> [3,5,9]
 
 -- A type alias for index lists.
 type Permutation = [Int]
@@ -259,13 +249,4 @@ multiply :: Permutation -> Permutation -> Permutation
 multiply p q = map (\i -> p !! (q !! i)) (identity (length p))
 
 permute :: Permutation -> [a] -> [a]
-permute []   _    = []
-permute list src  = permute' 0 list src
-  where permute' cc []       new = new
-        permute' cc (idx:xs) new = let new' = ins' 0 []
-                                       val = src !! cc
-                                       ins' cidx list'
-                                          | cidx >= length new = list'
-                                          | cidx == idx        = ins' (cidx+1) (list' ++ [val])
-                                          | otherwise          = ins' (cidx+1) (list' ++ [(new !! cidx)])
-                                    in permute' (cc+1) xs new'
+permute p = map snd . sortBy (comparing fst) . zip p
