@@ -25,17 +25,15 @@ import Mooc.Todo
 -- first line should be HELLO and the second one WORLD
 
 hello :: IO ()
-hello = do
-  putStrLn "HELLO"
-  putStrLn "WORLD"
+hello = do putStrLn "HELLO"
+           putStrLn "WORLD"
 
 ------------------------------------------------------------------------------
 -- Ex 2: define the IO operation greet that takes a name as an
 -- argument and prints a line "HELLO name".
 
 greet :: String -> IO ()
-greet name = do
-  putStrLn ("HELLO " ++ name)
+greet name = putStrLn $ "HELLO " ++ name
 
 ------------------------------------------------------------------------------
 -- Ex 3: define the IO operation greet2 that reads a name from the
@@ -45,9 +43,8 @@ greet name = do
 -- Try to use the greet operation in your solution.
 
 greet2 :: IO ()
-greet2 = do
-  name <- getLine
-  putStrLn ("HELLO " ++ name)
+greet2 = do name <- getLine
+            greet name
 
 ------------------------------------------------------------------------------
 -- Ex 4: define the IO operation readWords n which reads n lines from
@@ -61,11 +58,8 @@ greet2 = do
 --   ["alice","bob","carl"]
 
 readWords :: Int -> IO [String]
-readWords 0 = return []
-readWords n = do
-  word <- getLine
-  words <- readWords (n-1)
-  return (sort (word:words))
+readWords n = do words <- replicateM n getLine
+                 return $ sort words
 
 ------------------------------------------------------------------------------
 -- Ex 5: define the IO operation readUntil f, which reads lines from
@@ -82,21 +76,17 @@ readWords n = do
 --   ["bananas","garlic","pakchoi"]
 
 readUntil :: (String -> Bool) -> IO [String]
-readUntil f = do
-  word <- getLine
-  case f word of
-    True  -> return []
-    False -> do
-      words <- readUntil f
-      return (word:words)
+readUntil f = do word <- getLine
+                 if f word
+                   then return []
+                   else do words <- readUntil f
+                           return $ word:words
+
 ------------------------------------------------------------------------------
 -- Ex 6: given n, print the numbers from n to 0, one per line
 
 countdownPrint :: Int -> IO ()
-countdownPrint 0 = print 0
-countdownPrint n = do
-  print n
-  countdownPrint (n-1)
+countdownPrint n = mapM_ print [n,n-1..0]
 
 ------------------------------------------------------------------------------
 -- Ex 7: isums n should read n numbers from the user (one per line) and
@@ -111,13 +101,12 @@ countdownPrint n = do
 --   5. produces 9
 
 isums :: Int -> IO Int
-isums n = isums' n 0
-  where isums' 0 total = return total
-        isums' n' total = do
-          num <- getLine
-          print ((read num)+total)
-          rest <- isums' (n'-1) ((read num)+total)
-          return rest
+isums n = go 0 n
+  where go sum 0 = return sum
+        go sum n = do i <- readLn
+                      let sum' = sum+i
+                      print sum'
+                      go sum' (n-1)
 
 ------------------------------------------------------------------------------
 -- Ex 8: when is a useful function, but its first argument has type
@@ -125,11 +114,8 @@ isums n = isums' n 0
 -- argument has type IO Bool.
 
 whenM :: IO Bool -> IO () -> IO ()
-whenM cond op = do
-  res <- cond
-  case res of
-    True -> op
-    False -> return ()
+whenM cond op = do b <- cond
+                   when b op
 
 ------------------------------------------------------------------------------
 -- Ex 9: implement the while loop. while condition operation should
@@ -149,13 +135,9 @@ ask = do putStrLn "Y/N?"
          return $ line == "Y"
 
 while :: IO Bool -> IO () -> IO ()
-while cond op = do
-  res <- cond
-  case res of
-    True -> do
-      op
-      while cond op
-    False -> return ()
+while cond op = whenM cond iteration
+  where iteration = do op
+                       while cond op
 
 ------------------------------------------------------------------------------
 -- Ex 10: given a string and an IO operation, print the string, run
@@ -177,6 +159,6 @@ while cond op = do
 debug :: String -> IO a -> IO a
 debug s op = do
   putStrLn s
-  val <- op
+  ret <- op
   putStrLn s
-  return val
+  return ret
