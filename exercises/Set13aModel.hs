@@ -45,33 +45,25 @@ readNames s =
 -- (NB! There are obviously other corner cases like the inputs " " and
 -- "a b c", but you don't need to worry about those here)
 split :: String -> Maybe (String,String)
-split str = go [] str
-  where go built (' ':rest) = Just (built, rest)
-        go built (c:rest)   = go (built++[c]) rest
-        go _     []         = Nothing
+split s = case break (==' ') s of (a,' ':b) -> Just (a,b)
+                                  _         -> Nothing
 
 -- checkNumber should take a pair of two strings and return them
 -- unchanged if they don't contain numbers. Otherwise Nothing is
 -- returned.
 checkNumber :: (String, String) -> Maybe (String, String)
-checkNumber (str1, str2) =
-  case and [b1, b2] of
-    True -> Just (str1, str2)
-    otherwise -> Nothing
-  where check str = map (not . isDigit) str
-        b1 = and (check str1)
-        b2 = and (check str2)
+checkNumber (for,sur) = if all notNumber for && all notNumber sur
+                        then Just (for,sur)
+                        else Nothing
+  where notNumber c = not $ elem c "0123456789"
 
 -- checkCapitals should take a pair of two strings and return them
 -- unchanged if both start with a capital letter. Otherwise Nothing is
 -- returned.
 checkCapitals :: (String, String) -> Maybe (String, String)
-checkCapitals (for,sur) =
-    case and [b1, b2] of
-    True -> Just (for, sur)
-    otherwise -> Nothing
-  where b1 = isUpper (head for)
-        b2 = isUpper (head sur)
+checkCapitals (for,sur) = if isUpper (for!!0) && isUpper (sur!!0)
+                          then Just (for,sur)
+                          else Nothing
 
 ------------------------------------------------------------------------------
 -- Ex 2: Given a list of players and their scores (as [(String,Int)]),
@@ -98,15 +90,15 @@ checkCapitals (for,sur) =
 --     ==> Just "a"
 
 winner :: [(String,Int)] -> String -> String -> Maybe String
-winner scores player1 player2 =
-  lookup player1 scores
-  ?>
-  checkp2
-  ?>
-  (\(p1,p2) -> if p1 >= p2 then Just(player1) else Just(player2))
-  where checkp2 p1val = case lookup player2 scores of
-                          Just p2val -> Just (p1val, p2val)
-                          Nothing -> Nothing
+winner scores player1 player2 = do
+  score1 <- lookup player1 scores
+  score2 <- lookup player2 scores
+  return (if score2 > score1 then player2 else player1)
+-- OR
+winner' scores player1 player2 = do
+  lookup player1 scores ?>
+    (\score1 -> lookup player2 scores ?>
+      (\score2 -> Just (if score2 > score1 then player2 else player1)))
 
 ------------------------------------------------------------------------------
 -- Ex 3: given a list of indices and a list of values, return the sum
@@ -124,16 +116,12 @@ winner scores player1 player2 =
 --    Nothing
 
 selectSum :: Num a => [a] -> [Int] -> Maybe a
-selectSum is [] = Just 0
-selectSum is (x:xs) =
-  do val <- safeIndex is x
-     rest <- selectSum is xs
-     Just (val + rest)
+selectSum xs is = liftM sum $ mapM (safeIndex xs) is
 
 safeIndex :: [a] -> Int -> Maybe a
-safeIndex list idx = if idx >= 0 && idx < length list
-                     then Just (list !! idx)
-                     else Nothing
+safeIndex [] _ = Nothing
+safeIndex (x:xs) 0 = Just x
+safeIndex (x:xs) n = safeIndex xs (n-1)
 
 ------------------------------------------------------------------------------
 -- Ex 4: Here is the Logger monad from the course material. Implement
@@ -167,12 +155,12 @@ instance Applicative Logger where
   (<*>) = ap
 
 countAndLog :: Show a => (a -> Bool) -> [a] -> Logger Int
-countAndLog fn []     = return 0
-countAndLog fn (x:xs)
-  | fn x      = do msg (show x)
-                   val <- countAndLog fn xs
-                   return (1+val)
-  | otherwise = do countAndLog fn xs
+countAndLog p [] = return 0
+countAndLog p (x:xs)
+  | p x = do msg (show x)
+             res <- countAndLog p xs
+             return (res+1)
+  | otherwise = countAndLog p xs
 
 ------------------------------------------------------------------------------
 -- Ex 5: You can find the Bank and BankOp code from the course
@@ -188,13 +176,9 @@ countAndLog fn (x:xs)
 exampleBank :: Bank
 exampleBank = (Bank (Map.fromList [("harry",10),("cedric",7),("ginny",1)]))
 
-
 balance :: String -> BankOp Int
-balance accountName = BankOp(balance' accountName)
-
-balance' :: String -> Bank -> (Int,Bank)
-balance' accountName (Bank bank) = (bal, Bank(bank))
-  where bal = Map.findWithDefault 0 accountName bank
+balance accountName = BankOp query
+  where query (Bank accounts) = (Map.findWithDefault 0 accountName accounts, Bank accounts)
 
 ------------------------------------------------------------------------------
 -- Ex 6: Using the operations balance, withdrawOp and depositOp, and
@@ -213,8 +197,11 @@ balance' accountName (Bank bank) = (bal, Bank(bank))
 
 rob :: String -> String -> BankOp ()
 rob from to =
-  balance from +> withdrawOp from +> depositOp to
-
+  balance from
+  +>
+  withdrawOp from
+  +>
+  depositOp to
 
 ------------------------------------------------------------------------------
 -- Ex 7: using the State monad, write the operation `update` that first
@@ -226,7 +213,10 @@ rob from to =
 --    ==> ((),7)
 
 update :: State Int ()
-update = state (\s -> ((), (s*2)+1))
+update = do x <- get
+            put (2*x)
+            y <- get
+            put (y+1)
 
 ------------------------------------------------------------------------------
 -- Ex 8: Checking that parentheses are balanced with the State monad.
@@ -253,15 +243,12 @@ update = state (\s -> ((), (s*2)+1))
 --   parensMatch "(()((()))"   ==> False
 --   parensMatch "(()))("      ==> False
 
-psum :: (Int -> Int) -> Int -> Int
-psum fn orig
-  | orig == -1 = -1
-  | otherwise  = fn orig
-
 paren :: Char -> State Int ()
-paren '(' = state (\s -> ((), psum (+1)         s))
-paren ')' = state (\s -> ((), psum (subtract 1) s))
-paren _   = state (\s -> ((), s))
+paren c = do
+  s <- get
+  when (s>=0) (case c of '(' -> put (s+1)
+                         ')' -> put (s-1)
+                         _ -> return ())
 
 parensMatch :: String -> Bool
 parensMatch s = count == 0
@@ -292,13 +279,11 @@ parensMatch s = count == 0
 -- PS. The order of the list of pairs doesn't matter
 
 count :: Eq a => a -> State [(a,Int)] ()
-count x = state(\s -> ((), count' x s ))
-
-count' :: Eq a => a -> [(a,Int)] -> [(a,Int)]
-count' x [] = [(x, 1)]
-count' x ((k,v):kvs)
-  | x == k = (k, (v+1)):kvs
-  | otherwise = (k,v):count' x kvs
+count x = modify (inc x)
+  where inc x [] = [(x,1)]
+        inc x ((y,k):ys)
+          | x == y    = (y,k+1):ys
+          | otherwise = (y,k):inc x ys
 
 ------------------------------------------------------------------------------
 -- Ex 10: Implement the operation occurrences, which
@@ -320,8 +305,7 @@ count' x ((k,v):kvs)
 --    ==> (4,[(2,1),(3,1),(4,1),(7,1)])
 
 occurrences :: (Eq a) => [a] -> State [(a,Int)] Int
-occurrences [] = return 0
-occurrences (x:xs) =
-  do count x
-     occurrences xs
-     state (\s -> (length s, s))
+occurrences xs = do
+  mapM_ count xs
+  counts <- get
+  return (length counts)
