@@ -81,7 +81,7 @@ openDatabase name = do
 -- given a db connection, an account name, and an amount, deposit
 -- should add an (account, amount) row into the database
 deposit :: Connection -> T.Text -> Int -> IO ()
-deposit db key value = execute db depositQuery (key, value)
+deposit db account amount = execute db depositQuery (account, amount)
 
 ------------------------------------------------------------------------------
 -- Ex 2: Fetching an account's balance. Below you'll find
@@ -112,9 +112,9 @@ balanceQuery :: Query
 balanceQuery = Query (T.pack "SELECT amount FROM events WHERE account = ?;")
 
 balance :: Connection -> T.Text -> IO Int
-balance db text = do
-  values <- query db balanceQuery [text] :: IO [[Int]]
-  return (foldl (\old new -> old + (new!!0)) 0 values)
+balance db account = do
+  rows <- query db balanceQuery [account] :: IO [[Int]]
+  return (sum (map head rows))
 
 ------------------------------------------------------------------------------
 -- Ex 3: Now that we have the database part covered, let's think about
@@ -146,33 +146,30 @@ balance db text = do
 --   parseCommand [T.pack "deposit", T.pack "madoff", T.pack "123456"]
 --     ==> Just (Deposit "madoff" 123456)
 
+-- Withdraw added for Ex 7
 data Command = Deposit T.Text Int | Withdraw T.Text Int | Balance T.Text
   deriving (Show, Eq)
 
 parseInt :: T.Text -> Maybe Int
 parseInt = readMaybe . T.unpack
 
+-- Did you know you can give multiple type signatures at once like this?
+textDeposit, textWithdraw, textBalance :: T.Text
+textDeposit = T.pack "deposit"
+textWithdraw = T.pack "withdraw"
+textBalance = T.pack "balance"
+
+-- Includes the error handling from Ex 8.
 parseCommand :: [T.Text] -> Maybe Command
-parseCommand path
-  | cmd == T.pack "deposit" = depositCmd
-  | cmd == T.pack "balance" = balanceCmd
-  | cmd == T.pack "withdraw" = withdrawCmd
-  | otherwise = Nothing
-  where cmd = if plen > 0 then head path else T.pack ""
-        plen = length path
-        balanceCmd = if plen == 2
-                     then Just $ Balance (path!!1)
-                     else Nothing
-        depositCmd = if plen == 3
-                     then case parseInt (path!!2) of
-                      Just val -> Just $ Deposit (path!!1) val
-                      Nothing -> Nothing
-                     else Nothing
-        withdrawCmd = if plen == 3
-                     then case parseInt (path!!2) of
-                      Just val -> Just $ Withdraw (path!!1) val
-                      Nothing -> Nothing
-                     else Nothing
+parseCommand [command,account]
+  | command == textBalance  = return $ Balance account
+parseCommand [command,account,amountText]
+  | command == textDeposit  = do amount <- parseInt amountText
+                                 return $ Deposit account amount
+  | command == textWithdraw = do amount <- parseInt amountText
+                                 return $ Withdraw account amount
+parseCommand _ = Nothing
+
 ------------------------------------------------------------------------------
 -- Ex 4: Running commands. Implement the IO operation perform that takes a
 -- database Connection, the result of parseCommand (a Maybe Command),
@@ -196,17 +193,31 @@ parseCommand path
 --   Set14b> perform db (Just (Balance (T.pack "unknown")))
 --   "0"
 
+performDeposit :: Connection -> T.Text -> Int -> IO T.Text
+performDeposit db account amount = do deposit db account amount
+                                      return (T.pack "OK")
+
+performBalance :: Connection -> T.Text -> IO T.Text
+performBalance db account = do
+  answer <- balance db account
+  return (T.pack (show answer))
+
+-- For Ex 7:
+performWithdraw :: Connection -> T.Text -> Int -> IO T.Text
+performWithdraw db account amount = do deposit db account (negate amount)
+                                       return (T.pack "OK")
+
+-- For Ex 8:
+performError :: IO T.Text
+performError = return (T.pack "ERROR")
+
 perform :: Connection -> Maybe Command -> IO T.Text
-perform db mCommand =
-  case mCommand of
-    Nothing -> return $ T.pack "ERROR"
-    Just cmd -> handle cmd
-  where handle (Deposit text val)  = do deposit db text val
-                                        return $ T.pack "OK"
-        handle (Withdraw text val) = do deposit db text (negate val)
-                                        return $ T.pack "OK"
-        handle (Balance text)      = do val <- balance db text
-                                        return $ T.pack $ show val
+perform db (Just (Deposit account amount)) = performDeposit db account amount
+perform db (Just (Balance account)) = performBalance db account
+-- For Ex 7:
+perform db (Just (Withdraw account amount)) = performWithdraw db account amount
+-- For Ex 8:
+perform db Nothing = performError
 
 ------------------------------------------------------------------------------
 -- Ex 5: Next up, let's set up a simple HTTP server. Implement a WAI
@@ -226,8 +237,7 @@ encodeResponse t = LB.fromStrict (encodeUtf8 t)
 -- Remember:
 -- type Application = Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
 simpleServer :: Application
-simpleServer request respond = do
-  respond $ responseLBS status200 [] (encodeResponse $ T.pack "BANK")
+simpleServer request respond = respond (responseLBS status200 [] (encodeResponse (T.pack "BANK")))
 
 ------------------------------------------------------------------------------
 -- Ex 6: Now we finally have all the pieces we need to actually
@@ -258,9 +268,15 @@ simpleServer request respond = do
 server :: Connection -> Application
 server db request respond = do
   let path = pathInfo request
-      command = parseCommand path
-  result <- perform db command
-  respond $ responseLBS status200 [] (encodeResponse $ result)
+  --putStr "Request: "
+  --print path
+  let command = parseCommand path
+  --putStr "Command: "
+  --print command
+  response <- perform db command
+  --putStr "Response: "
+  --print response
+  respond (responseLBS status200 [] (encodeResponse response))
 
 port :: Int
 port = 3421
@@ -291,6 +307,7 @@ main = do
 --   - Open <http://localhost:3421/balance/simon> in your browser.
 --     You should see the text 11.
 
+-- See solutions to exercises 3 and 4 above
 
 ------------------------------------------------------------------------------
 -- Ex 8: Error handling. Modify the parseCommand function so that it
@@ -312,3 +329,4 @@ main = do
 --    - http://localhost:3421/balance/matti/pekka
 
 
+-- See solutions to exercises 3 and 4 above
