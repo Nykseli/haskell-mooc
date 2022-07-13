@@ -28,10 +28,13 @@ import qualified Data.ByteString.Lazy as BL
 --  greetText (T.pack "Benedict Cumberbatch") ==> "Hello, Benedict Cumber...!"
 
 greetText :: T.Text -> T.Text
-greetText name = T.pack "Hello, " <> n <> T.pack end
-  where n = T.take 15 name
-        end = if len > 15 then "...!" else "!"
-        len = T.length name
+greetText name = T.pack "Hello, " <> shorten 15 name <> T.pack "!"
+
+shorten :: Int -> T.Text -> T.Text
+shorten n t
+  | T.length t <= n = t
+  | otherwise = T.take n t <> T.pack "..."
+
 ------------------------------------------------------------------------------
 -- Ex 2: Capitalize every second word of a Text.
 --
@@ -42,7 +45,8 @@ greetText name = T.pack "Hello, " <> n <> T.pack end
 --     ==> "WORD"
 
 shout :: T.Text -> T.Text
-shout src = T.unwords $ map (\(idx,val) -> if idx `mod` 2 == 0 then T.toUpper val else val) (zip [0..] (T.words src))
+shout t = T.unwords (zipWith ($) funcs (T.words t))
+  where funcs = cycle [T.toUpper, id]
 
 ------------------------------------------------------------------------------
 -- Ex 3: Find the longest sequence of a single character repeating in
@@ -53,15 +57,20 @@ shout src = T.unwords $ map (\(idx,val) -> if idx `mod` 2 == 0 then T.toUpper va
 --   longestRepeat (T.pack "aabbbbccc") ==> 4
 
 longestRepeat :: T.Text -> Int
-longestRepeat text = go (T.unpack text) 1 0
-  where go []     _       biggest = biggest
-        go (c:cs) current biggest = case length cs of
-                                      0 -> if current > biggest then current else biggest
-                                      otherwise -> go cs cur big
-                                      where cur = if n == c then (current+1) else 1
-                                            big = if cur > biggest then cur else biggest
-                                            n = head cs
+longestRepeat t =
+  case T.uncons t of
+    Nothing -> 0
+    Just (c,rest) -> longestHelper 0 c 1 rest
 
+longestHelper :: Int -> Char -> Int -> T.Text -> Int
+longestHelper longest c count t =
+  case T.uncons t of
+    Nothing -> max longest count
+    Just (d,rest)
+      | d==c      -> longestHelper longest             c (count+1) rest
+      | otherwise -> longestHelper (max longest count) d 1         rest
+-- OR
+longestRepeat' t = maximum (0 : map T.length (T.group t))
 
 ------------------------------------------------------------------------------
 -- Ex 4: Given a lazy (potentially infinite) Text, extract the first n
@@ -74,7 +83,8 @@ longestRepeat text = go (T.unpack text) 1 0
 --   takeStrict 15 (TL.pack (cycle "asdf"))  ==>  "asdfasdfasdfasd"
 
 takeStrict :: Int64 -> TL.Text -> T.Text
-takeStrict n text = T.pack $ TL.unpack $ TL.take n text
+takeStrict n t = TL.toStrict (TL.take n t)
+-- Answer: n :: Int64 because TL.take wants an Int64
 
 ------------------------------------------------------------------------------
 -- Ex 5: Find the difference between the largest and smallest byte
@@ -86,10 +96,9 @@ takeStrict n text = T.pack $ TL.unpack $ TL.take n text
 --   byteRange (B.pack [3]) ==> 0
 
 byteRange :: B.ByteString -> Word8
-byteRange bytes = go $ B.unpack bytes
-  where go []     = 0
-        go (x:[]) = 0
-        go xs     = (maximum xs) - (minimum xs)
+byteRange b
+  | B.null b = 0
+  | otherwise = B.maximum b - B.minimum b
 
 ------------------------------------------------------------------------------
 -- Ex 6: Compute the XOR checksum of a ByteString. The XOR checksum of
@@ -110,7 +119,7 @@ byteRange bytes = go $ B.unpack bytes
 --   xorChecksum (B.pack []) ==> 0
 
 xorChecksum :: B.ByteString -> Word8
-xorChecksum bytes = foldl (\new old -> xor new old) 0 (B.unpack bytes)
+xorChecksum b = B.foldl' xor 0 b
 
 ------------------------------------------------------------------------------
 -- Ex 7: Given a ByteString, compute how many UTF-8 characters it
@@ -127,10 +136,8 @@ xorChecksum bytes = foldl (\new old -> xor new old) 0 (B.unpack bytes)
 --   countUtf8Chars (B.drop 1 (encodeUtf8 (T.pack "åäö"))) ==> Nothing
 
 countUtf8Chars :: B.ByteString -> Maybe Int
-countUtf8Chars bytes =
-  case decodeUtf8' bytes of
-    Right str -> Just(T.length str)
-    Left _ -> Nothing
+countUtf8Chars b = case decodeUtf8' b of Left _ -> Nothing
+                                         Right t -> Just (T.length t)
 
 ------------------------------------------------------------------------------
 -- Ex 8: Given a (nonempty) strict ByteString b, generate an infinite
@@ -142,5 +149,7 @@ countUtf8Chars bytes =
 --     ==> [0,1,2,2,1,0,0,1,2,2,1,0,0,1,2,2,1,0,0,1]
 
 pingpong :: B.ByteString -> BL.ByteString
-pingpong bytes = BL.pack ((B.unpack bytes) <> (reverse (B.unpack bytes))) <> pingpong bytes
+pingpong b = bl <> rbl <> pingpong b
+  where bl = BL.fromStrict b
+        rbl = BL.reverse bl
 
