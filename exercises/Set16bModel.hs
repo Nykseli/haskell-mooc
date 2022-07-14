@@ -9,6 +9,7 @@ import Data.Char (toUpper)
 -- Ex 1: Define a constant pounds with type Money GBP and a value of
 -- 3. The type Money is imported from Example.Phantom but you'll need
 -- to introduce GBP yourself.
+
 data GBP
 
 pounds :: Money GBP
@@ -29,8 +30,8 @@ pounds = Money 3
 usdToChf :: Rate USD CHF
 usdToChf = Rate 1.11
 
-composeRates :: Rate from next -> Rate next to -> Rate from to
-composeRates (Rate from) (Rate to) = Rate (from*to)
+composeRates :: Rate from mid -> Rate mid to -> Rate from to
+composeRates (Rate x) (Rate y) = Rate (x*y)
 
 ------------------------------------------------------------------------------
 -- Ex 3: Tracking first, last and full names with phantom types. The
@@ -39,10 +40,9 @@ composeRates (Rate from) (Rate to) = Rate (from*to)
 --  * Name Last - for last names
 --  * Name Full - for full names
 --
--- In this exercise, you should define the phantom types First, Last
--- and Full, and the parameterised type Name. Then implement the
--- functions fromName, toFirst and toLast. Give the functions the
--- commented-out types
+-- In this exercise, you should define the types First, Last, Full and
+-- Name. Then implement the functions fromName, toFirst and toLast. Give
+-- the functions the commented-out types
 --
 -- Examples:
 --  fromName (toFirst "bob") ==> "bob"
@@ -55,19 +55,18 @@ data Last
 data Full
 
 data Name a = Name String
-  deriving (Show,Eq)
 
 -- Get the String contained in a name
-fromName :: Name a -> String
-fromName (Name str) = str
+--fromName :: Name a -> String
+fromName (Name s) = s
 
 -- Build a Name First
 toFirst :: String -> Name First
-toFirst str = Name str
+toFirst s = Name s
 
 -- Build a Name Last
 toLast :: String -> Name Last
-toLast str = Name str
+toLast s = Name s
 
 ------------------------------------------------------------------------------
 -- Ex 4: Implement the functions capitalize and toFull.
@@ -88,12 +87,10 @@ toLast str = Name str
 --  fromName (capitalize (toLast "smith")) ==> "Smith"
 
 capitalize :: Name a -> Name a
-capitalize (Name name) = Name (unwords $ map cap (words name))
-  where cap [] = []
-        cap (x:xs) = toUpper x : xs
+capitalize (Name (c:cs)) = Name (toUpper c : cs)
 
 toFull :: Name First -> Name Last -> Name Full
-toFull (Name f) (Name l) = Name (unwords [f, l])
+toFull (Name f) (Name l) = Name (f ++ " " ++ l)
 
 ------------------------------------------------------------------------------
 -- Ex 5: Type classes can let you write code that handles different
@@ -108,10 +105,10 @@ class Render currency where
   render :: Money currency -> String
 
 instance Render EUR where
-  render (Money val) = (show val)++"e"
+  render (Money x) = show x ++ "e"
 
 instance Render USD where
-  render (Money val) = "$"++(show val)
+  render (Money x) = "$" ++ show x
 
 instance Render CHF where
-  render (Money val) = (show val)++"chf"
+  render (Money x) = show x ++ "chf"
